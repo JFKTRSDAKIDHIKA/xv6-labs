@@ -80,3 +80,21 @@ kalloc(void)
     memset((char*)r, 5, PGSIZE); // fill with junk
   return (void*)r;
 }
+
+// calculate the num of free memory
+int kfreemem(void){
+  int num = 0;
+  struct run *p;
+  p = kmem.freelist;
+  while(p != 0){
+    num = num + 1;
+    p = p->next;
+  }
+ // printf("kfreemen: %d", PGSIZE * num);
+  return PGSIZE * num;
+}
+
+
+
+
+

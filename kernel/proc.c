@@ -296,6 +296,9 @@ fork(void)
   }
   np->sz = p->sz;
 
+  // copy mask from parent to children
+  np->mask = p->mask;
+
   // copy saved user registers.
   *(np->trapframe) = *(p->trapframe);
 
@@ -686,3 +689,21 @@ procdump(void)
     printf("\n");
   }
 }
+
+// calculate the num of processes
+int 
+kprocnum(void){
+  struct proc *p;
+  int num = 0;
+  for(p = proc; p < &proc[NPROC]; p++){
+    if(p->state != UNUSED)
+      num++;
+  }
+ // printf("kprocnum returns: %d", num);
+  return num;
+}
+
+
+
+
+
