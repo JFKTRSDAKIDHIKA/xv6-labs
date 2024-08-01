@@ -75,6 +75,33 @@ int
 sys_pgaccess(void)
 {
   // lab pgtbl: your code here.
+  uint64 va;
+  argaddr(0, &va);
+  int n;
+  argint(1, &n);
+ // printf("n =: \n", n);
+  uint64 ua2b;//a user address to a buffer
+  argaddr(2, &ua2b);
+  int num_bytes = (n + 7) / 8; // one page, one bit. How many byte i need?
+  uchar bitmask[num_bytes];
+ // printf("num_bytes =: %d\n", num_bytes);
+  memset(bitmask, 0, num_bytes); // 初始化为0
+ // printf("初始化的Bitmask: 0x%x\n", bitmask);
+ // printf("ok before walk\n");
+
+  for(int i = 0; i < n; i++){
+    pte_t *pte = walk(myproc()->pagetable, va + i * PGSIZE, 0);
+    if(pte && (*pte & PTE_V)){
+      if(*pte & PTE_A){
+       // printf("here %d\n",i);
+        bitmask[i / 8] |= (1 << (i % 8));
+        *pte &= ~PTE_A;
+      }
+    }
+  }
+
+  printf("Bitmask: 0x%x\n", bitmask);
+  copyout(myproc()->pagetable, ua2b, (char *) bitmask, (uint64)num_bytes);
   return 0;
 }
 #endif
