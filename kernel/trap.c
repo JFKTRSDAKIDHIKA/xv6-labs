@@ -35,7 +35,11 @@ trapinithart(void)
 //
 void
 usertrap(void)
-{
+{ if(r_scause() ==12){
+	     printf("fatal - scause : %d\n", r_scause());
+	     printf("address: %p", r_sepc());
+		     
+		     }
   int which_dev = 0;
 
   if((r_sstatus() & SSTATUS_SPP) != 0)
@@ -49,10 +53,8 @@ usertrap(void)
   
   // save user program counter.
   p->trapframe->epc = r_sepc();
-  
   if(r_scause() == 8){
     // system call
-
     if(killed(p))
       exit(-1);
 
@@ -77,9 +79,48 @@ usertrap(void)
     exit(-1);
 
   // give up the CPU if this is a timer interrupt.
-  if(which_dev == 2)
-    yield();
-
+  if(which_dev == 2){
+    if(p->alarm_ticks != 0 && !p->in_handler && p->remaining_ticks >0)// the proc is currently not in handler func and ticks remain.
+      p->remaining_ticks = p->remaining_ticks - 1;	 
+    if(p->alarm_ticks != 0 && !p->in_handler && p->remaining_ticks == 0 ){// ticks have expired
+      p->remaining_ticks = p->alarm_ticks;
+      p->in_handler = 1;
+      p->intr_frame.ra = p->trapframe->ra;
+      p->intr_frame.sp = p->trapframe->sp;
+      p->intr_frame.gp = p->trapframe->gp;
+      p->intr_frame.tp = p->trapframe->tp;
+      p->intr_frame.t0 = p->trapframe->t0;
+      p->intr_frame.t1 = p->trapframe->t1;
+      p->intr_frame.t2 = p->trapframe->t2;
+      p->intr_frame.s0 = p->trapframe->s0;
+      p->intr_frame.s1 = p->trapframe->s1;
+      p->intr_frame.a0 = p->trapframe->a0;
+      p->intr_frame.a1 = p->trapframe->a1;
+      p->intr_frame.a2 = p->trapframe->a2;
+      p->intr_frame.a3 = p->trapframe->a3;
+      p->intr_frame.a4 = p->trapframe->a4;
+      p->intr_frame.a5 = p->trapframe->a5;
+      p->intr_frame.a6 = p->trapframe->a6;
+      p->intr_frame.a7 = p->trapframe->a7;
+      p->intr_frame.s2 = p->trapframe->s2;
+      p->intr_frame.s3 = p->trapframe->s3;
+      p->intr_frame.s4 = p->trapframe->s4;
+      p->intr_frame.s5 = p->trapframe->s5;
+      p->intr_frame.s6 = p->trapframe->s6;
+      p->intr_frame.s7 = p->trapframe->s7;
+      p->intr_frame.s8 = p->trapframe->s8;
+      p->intr_frame.s9 = p->trapframe->s9;
+      p->intr_frame.s10 = p->trapframe->s10;
+      p->intr_frame.s11 = p->trapframe->s11;
+      p->intr_frame.t3 = p->trapframe->t3;
+      p->intr_frame.t4 = p->trapframe->t4;
+      p->intr_frame.t5 = p->trapframe->t5;
+      p->intr_frame.t6 = p->trapframe->t6; 
+      p->intr_frame.epc = p->trapframe->epc;// trapframe->epc stores the user address i want to jump back soon, but now i want to jump to handler.
+      p->trapframe->epc = p->alarm_handler;
+    }
+      yield();
+  }
   usertrapret();
 }
 
@@ -106,7 +147,7 @@ usertrapret(void)
   p->trapframe->kernel_sp = p->kstack + PGSIZE; // process's kernel stack
   p->trapframe->kernel_trap = (uint64)usertrap;
   p->trapframe->kernel_hartid = r_tp();         // hartid for cpuid()
-
+//  p->trapframe->a0 = p->intr_frame.a0;
   // set up the registers that trampoline.S's sret will use
   // to get to user space.
   
@@ -118,7 +159,6 @@ usertrapret(void)
 
   // set S Exception Program Counter to the saved user pc.
   w_sepc(p->trapframe->epc);
-
   // tell trampoline.S the user page table to switch to.
   uint64 satp = MAKE_SATP(p->pagetable);
 

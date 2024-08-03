@@ -22,7 +22,9 @@ void dummy_handler();
 
 int
 main(int argc, char *argv[])
-{
+{  
+ // asm volatile("ebreak");
+
   test0();
   test1();
   test2();
@@ -36,7 +38,6 @@ void
 periodic()
 {
   count = count + 1;
-  printf("alarm!\n");
   sigreturn();
 }
 
@@ -57,7 +58,7 @@ test0()
   }
   sigalarm(0, 0);
   if(count > 0){
-    printf("test0 passed\n");
+    printf("\ntest0 passed\n");
   } else {
     printf("\ntest0 failed: the kernel never called the alarm handler\n");
   }
@@ -84,7 +85,7 @@ test1()
   int i;
   int j;
 
-  printf("test1 start\n");
+  printf("\ntest1 start\n");
   count = 0;
   j = 0;
   sigalarm(2, periodic);
@@ -105,7 +106,7 @@ test1()
     // to get an incorrect value.
     printf("\ntest1 failed: foo() executed fewer times than it was called\n");
   } else {
-    printf("test1 passed\n");
+    printf("\ntest1 passed\n");
   }
 }
 

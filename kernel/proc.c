@@ -124,6 +124,10 @@ allocproc(void)
 found:
   p->pid = allocpid();
   p->state = USED;
+  p->alarm_ticks = 0;
+  p->alarm_handler = 0;
+  p->remaining_ticks = 0;
+  p->in_handler = 0;
 
   // Allocate a trapframe page.
   if((p->trapframe = (struct trapframe *)kalloc()) == 0){
@@ -131,7 +135,14 @@ found:
     release(&p->lock);
     return 0;
   }
-
+/*
+  // Allocate a intr_fram page.
+  if((p->intr_frame = (struct intr_frame *)kalloc()) == 0){
+    freeproc(p);
+    release(&p->lock);
+    return 0;
+  }
+*/
   // An empty user page table.
   p->pagetable = proc_pagetable(p);
   if(p->pagetable == 0){
@@ -139,7 +150,7 @@ found:
     release(&p->lock);
     return 0;
   }
-
+  
   // Set up new context to start executing at forkret,
   // which returns to user space.
   memset(&p->context, 0, sizeof(p->context));
@@ -154,7 +165,11 @@ found:
 // p->lock must be held.
 static void
 freeproc(struct proc *p)
-{
+{ /*
+  if(p->intr_frame)
+    kfree((void*)p->intr_frame);
+  p->intr_frame = 0;
+  */
   if(p->trapframe)
     kfree((void*)p->trapframe);
   p->trapframe = 0;
@@ -201,7 +216,14 @@ proc_pagetable(struct proc *p)
     uvmfree(pagetable, 0);
     return 0;
   }
-
+  /*
+  if(mappages(pagetable, TRAPFRAME, PGSIZE,
+              (uint64)(p->trapframe), PTE_R | PTE_W) < 0){
+    uvmunmap(pagetable, TRAMPOLINE, 1, 0);
+    uvmfree(pagetable, 0);
+    return 0;
+  }
+*/
   return pagetable;
 }
 

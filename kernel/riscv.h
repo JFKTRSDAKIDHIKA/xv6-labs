@@ -52,6 +52,7 @@ static inline uint64
 r_sstatus()
 {
   uint64 x;
+  // inline assembly, 在 C 代码中直接插入汇编代码
   asm volatile("csrr %0, sstatus" : "=r" (x) );
   return x;
 }
@@ -325,6 +326,14 @@ sfence_vma()
 {
   // the zero, zero means flush all TLB entries.
   asm volatile("sfence.vma zero, zero");
+}
+
+static inline uint64
+r_fp()
+{
+  uint64 x;
+  asm volatile("mv %0, s0" : "=r" (x) );
+  return x;
 }
 
 typedef uint64 pte_t;
