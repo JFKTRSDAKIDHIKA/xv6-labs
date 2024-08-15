@@ -62,3 +62,6 @@
 //   TRAPFRAME (p->trapframe, used by the trampoline)
 //   TRAMPOLINE (the same page as in the kernel)
 #define TRAPFRAME (TRAMPOLINE - PGSIZE)
+
+// reference count , calculate the index of the count array from the physical address.
+#define PA2INDEX(PA) (PA / PGSIZE)

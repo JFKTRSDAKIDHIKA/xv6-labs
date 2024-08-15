@@ -6,6 +6,8 @@
 #include "proc.h"
 #include "defs.h"
 
+extern int ref_num[];
+
 struct spinlock tickslock;
 uint ticks;
 
@@ -49,7 +51,11 @@ usertrap(void)
   
   // save user program counter.
   p->trapframe->epc = r_sepc();
-  
+  pagetable_t pagetable = p->pagetable;
+  pte_t *error_pte;
+  uint64 error_va, error_pa;
+  char *mem;
+  uint flags;
   if(r_scause() == 8){
     // system call
 
@@ -65,6 +71,27 @@ usertrap(void)
     intr_on();
 
     syscall();
+  } else if(r_scause() == 15){
+//    printf("now store page table error has been triggered!\n");
+   
+     error_va = r_stval(); // the virtual address which trigger pagefault.
+    error_pte = walk(pagetable, error_va, 0);
+    error_pa = PTE2PA((uint64)*error_pte); 
+   
+    if(*error_pte & PTE_COW){
+      if((mem = kalloc()) == 0){
+        printf("usertrap: out of memory\n"); 
+	p->killed = 1; 
+	return;
+      } 
+    flags = PTE_FLAGS(*error_pte);
+    memmove(mem, (char*)PGROUNDDOWN(error_pa), PGSIZE);
+    uvmunmap(pagetable, PGROUNDDOWN(error_va), 1, 1);
+    mappages(pagetable, PGROUNDDOWN(error_va), PGSIZE, (uint64)mem, (flags | PTE_W) & (~PTE_COW));
+    }
+
+  
+  
   } else if((which_dev = devintr()) != 0){
     // ok
   } else {
