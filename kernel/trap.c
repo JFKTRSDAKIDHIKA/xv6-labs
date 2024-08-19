@@ -14,7 +14,7 @@ uint ticks;
 extern char trampoline[], uservec[], userret[];
 
 // in kernelvec.S, calls kerneltrap().
-void kernelvec();
+void kernelvec(); // kernelvec is a particualr reference to the address of a particular address.
 
 extern int devintr();
 
@@ -40,7 +40,7 @@ usertrap(void)
 {
   int which_dev = 0;
 
-  if((r_sstatus() & SSTATUS_SPP) != 0)
+  if((r_sstatus() & SSTATUS_SPP) != 0) // / Previous mode, 1=Supervisor, 0=User.
     panic("usertrap: not from user mode");
 
   // send interrupts and exceptions to kerneltrap(),
@@ -206,8 +206,8 @@ devintr()
 {
   uint64 scause = r_scause();
 
-  if((scause & 0x8000000000000000L) &&
-     (scause & 0xff) == 9){
+  if((scause & 0x8000000000000000L) && // MSB in scause tells the type of exception. 1 for interrupt, 0 for trap.
+     (scause & 0xff) == 9){ // the low 8 bits in scause stores the Exception Code.
     // this is a supervisor external interrupt, via PLIC.
 
     // irq indicates which device interrupted.

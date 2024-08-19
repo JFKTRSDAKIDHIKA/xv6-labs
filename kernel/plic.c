@@ -34,7 +34,8 @@ int
 plic_claim(void)
 {
   int hart = cpuid();
-  int irq = *(uint32*)PLIC_SCLAIM(hart);
+  int irq = *(uint32*)PLIC_SCLAIM(hart); 
+  // PLIC_SCLAIM() calculates the corresponding Claim/Complete register in the PLTC to the hart. This reg holds information about which device interrupt to be handled.
   return irq;
 }
 
