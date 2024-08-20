@@ -368,7 +368,10 @@ exit(int status)
   acquire(&wait_lock);
 
   // Give any children to init.
-  reparent(p);
+  reparent(p); // 在exit函数中，会为即将exit进程的子进程重新指定父进程为init进程，也就是PID为1的进程。
+  /*
+   * 每一个正在exit的进程，都有一个父进程中的对应的wait系统调用。父进程中的wait系统调用会完成进程退出最后的几个步骤。
+   * */
 
   // Parent might be sleeping in wait().
   wakeup(p->parent);
@@ -376,12 +379,12 @@ exit(int status)
   acquire(&p->lock);
 
   p->xstate = status;
-  p->state = ZOMBIE;
+  p->state = ZOMBIE; // 进程的状态被设置为ZOMBIE。现在进程还没有完全释放它的资源，所以它还不能被重用。
 
   release(&wait_lock);
 
   // Jump into the scheduler, never to return.
-  sched();
+  sched(); // 进程不会再运行了，因为它的状态是ZOMBIE。所以调度器线程会决定运行其他的进程。
   panic("zombie exit");
 }
 
@@ -414,7 +417,7 @@ wait(uint64 addr)
             release(&wait_lock);
             return -1;
           }
-          freeproc(pp);
+          freeproc(pp); // 清理进程的资源
           release(&pp->lock);
           release(&wait_lock);
           return pid;
@@ -462,13 +465,14 @@ scheduler(void)
         // before jumping back to us.
         p->state = RUNNING;
         c->proc = p;
-        swtch(&c->context, &p->context);
+        swtch(&c->context, &p->context); //调度器线程之前也调用了switch函数，现在恢复执行会从自己的switch函数返回
 
         // Process is done running for now.
         // It should have changed its p->state before coming back.
         c->proc = 0;
       }
-      release(&p->lock);
+      release(&p->lock); //切换到调度器线程，调度器线程再释放进程锁。
+      // 调度器线程会在进程的线程完全停止使用自己的栈之后，再释放进程的锁。
     }
   }
 }
@@ -497,6 +501,10 @@ sched(void)
 
   intena = mycpu()->intena;
   swtch(&p->context, &mycpu()->context);
+  /*
+   *XV6中，不允许进程在执行switch函数的过程中，持有任何其他的锁。
+   *reason :假设进程还持有了uart的lock，那么在switch之后uart的锁被不在运行的process持有，如果在运行的process希望持有uart的lock就会产生dead lock.
+   * */
   mycpu()->intena = intena;
 }
 
@@ -505,8 +513,9 @@ void
 yield(void)
 {
   struct proc *p = myproc();
-  acquire(&p->lock);
-  p->state = RUNNABLE;
+  acquire(&p->lock); //在call swtch()之前，先获取线程对应的用户进程的锁。
+  // 阻止其他CPU核的调度器线程在当前进程完成切换前，发现进程是RUNNABLE的状态并尝试运行它。
+  p->state = RUNNABLE; // 进程将自己的状态从RUNNING设置为RUNNABLE.
   sched();
   release(&p->lock);
 }
@@ -535,6 +544,8 @@ forkret(void)
   usertrapret();
 }
 
+// Coordination就是有关出让CPU，直到等待的事件发生再恢复执行。
+
 // Atomically release lock and sleep on chan.
 // Reacquires lock when awakened.
 void
@@ -553,10 +564,10 @@ sleep(void *chan, struct spinlock *lk)
   release(lk);
 
   // Go to sleep.
-  p->chan = chan;
-  p->state = SLEEPING;
+  p->chan = chan; // 记录特定的sleep channel值，这样之后的wakeup函数才能发现是当前进程正在等待wakeup对应的事件。
+  p->state = SLEEPING; // 将进程的状态设置为SLEEPING，表明当前进程不想再运行，而是正在等待一个特定的事件。
 
-  sched();
+  sched(); // 调用switch函数出让CPU。
 
   // Tidy up.
   p->chan = 0;
@@ -598,7 +609,7 @@ kill(int pid)
       p->killed = 1;
       if(p->state == SLEEPING){
         // Wake process from sleep().
-        p->state = RUNNABLE;
+        p->state = RUNNABLE; // 如果进程在SLEEPING状态时被kill了，进程会实际的退出。
       }
       release(&p->lock);
       return 0;

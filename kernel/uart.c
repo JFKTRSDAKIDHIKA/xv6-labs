@@ -150,7 +150,7 @@ uartstart()
     uart_tx_r += 1;
     
     // maybe uartputc() is waiting for space in the buffer.
-    wakeup(&uart_tx_r);
+    wakeup(&uart_tx_r); //wakeup函数。这个函数会使得uartwrite中的sleep函数恢复执行，并尝试发送一个新的字符。
     
     WriteReg(THR, c);
   }
@@ -172,6 +172,10 @@ uartgetc(void)
 // handle a uart interrupt, raised because input has
 // arrived, or the uart is ready for more output, or
 // both. called from devintr().
+/*
+ * UART硬件会在完成传输一个字符后，触发一个中断。所以UART驱动中除了uartwrite函数外，还有名为uartintr的中断处理程序。
+ * 这个中断处理程序会在UART硬件触发中断时由trap.c代码调用。
+ * */
 void
 uartintr(void)
 {

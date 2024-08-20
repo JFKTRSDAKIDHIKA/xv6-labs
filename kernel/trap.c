@@ -54,7 +54,7 @@ usertrap(void)
     // system call
 
     if(killed(p))
-      exit(-1);
+      exit(-1); // 在这个内核代码位置，代码并没有持有任何锁，也不在执行任何操作的过程中，所以进程通过exit退出是完全安全的。
 
     // sepc points to the ecall instruction,
     // but we want to return to the next instruction.
@@ -73,8 +73,8 @@ usertrap(void)
     setkilled(p);
   }
 
-  if(killed(p))
-    exit(-1);
+  if(killed(p)) 
+    exit(-1); // 在执行完系统调用之后，进程会再次检查自己是否已经被kill了。即使进程是被中断打断，这里的检查也会被执行。
 
   // give up the CPU if this is a timer interrupt.
   if(which_dev == 2)
