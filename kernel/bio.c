@@ -39,6 +39,7 @@ int can_lock(int , int );
 void
 binit(void)
 {
+/*
   initlock(&bcache.lock, "global.lock");
   for (int i = 0; i < NBUCKET; i++) { // Initialize each bucket's spinlock.
     initlock(&bcache.bucket[i].lock, "bcache.bucket"); // Initialize the spinlock of each bucket.
@@ -67,7 +68,8 @@ binit(void)
       remaining_bufs--; // Distribute one extra buffer to each bucket until the remainder is zero.
     }
   }
-/*
+*/
+
   initlock(&bcache.lock,"global.lock");
   for(int i = 0; i < NBUCKET; i++){ // tranverse through first 9 buckets.
     initlock(&bcache.bucket[i].lock, "bcache.bucket"); // Initilize the spinlock of each bucket.
@@ -81,7 +83,7 @@ binit(void)
     bcache.buf[j].next = bcache.bucket[0].first;
     bcache.bucket[0].first = &bcache.buf[j];
   }
-*/
+
 }
 
 // Look through buffer cache for block on device dev.
@@ -111,8 +113,8 @@ bget(uint dev, uint blockno)
   // Not cached.
   // Recycle the least recently sed (LRU) unused buffer.
   for(int i =0 ;i < NBUF; i++){
-    if(can_lock(BLOCKNO2INDEX(blockno),i))
-      continue;
+//    if(can_lock(BLOCKNO2INDEX(blockno),i))
+//      continue;
     if(bcache.buf[i].refcnt == 0) {
       if(bcache.buf[i].origin_bucket != BLOCKNO2INDEX(blockno)){
         acquire(&bcache.bucket[bcache.buf[i].origin_bucket].lock);
