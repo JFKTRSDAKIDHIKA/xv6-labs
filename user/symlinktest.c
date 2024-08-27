@@ -20,9 +20,7 @@ int
 main(int argc, char *argv[])
 {
   cleanup();
-  printf("1\n");
   testsymlink();
-  printf("2\n");
   concur();
   exit(failed);
   
@@ -73,15 +71,12 @@ testsymlink(void)
   r = symlink("/testsymlink/a", "/testsymlink/b");
   if(r < 0)
     fail("symlink b -> a failed");
-printf("76,9\n");
   if(write(fd1, buf, sizeof(buf)) != 4)
     fail("failed to write to a");
-printf("79,9\n");
   if (stat_slink("/testsymlink/b", &st) != 0)
     fail("failed to stat b");
   if(st.type != T_SYMLINK)
     fail("b isn't a symlink");
-printf("84,9");
   fd2 = open("/testsymlink/b", O_RDWR);
   if(fd2 < 0)
     fail("failed to open b");

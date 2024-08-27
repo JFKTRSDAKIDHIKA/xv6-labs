@@ -453,7 +453,6 @@ bmap(struct inode *ip, uint bn)
         }
       }
 //      if(!holdingsleep(&bp2->lock))
-//      printf("2\n");
       brelse(bp2);
       return addr2;
       }
@@ -566,7 +565,7 @@ readi(struct inode *ip, int user_dst, uint64 dst, uint off, uint n)
 // there was an error of some kind.
 int
 writei(struct inode *ip, int user_src, uint64 src, uint off, uint n)
-{ printf("ok0\n");
+{
   uint tot, m;
   struct buf *bp;
 
@@ -577,21 +576,17 @@ writei(struct inode *ip, int user_src, uint64 src, uint off, uint n)
 
   for(tot=0; tot<n; tot+=m, off+=m, src+=m){
     uint addr = bmap(ip, off/BSIZE);
-    printf("ok1\n");
     if(addr == 0)
       break;
     bp = bread(ip->dev, addr);
-    printf("ok2\n");
     m = min(n - tot, BSIZE - off%BSIZE);
     if(either_copyin(bp->data + (off % BSIZE), user_src, src, m) == -1) {
       brelse(bp);
       break;
     }
     log_write(bp);
-    printf("ok3\n");
     brelse(bp);
   }
-  printf("ok4\n");
 
   if(off > ip->size)
     ip->size = off;
@@ -600,7 +595,6 @@ writei(struct inode *ip, int user_src, uint64 src, uint off, uint n)
   // because the loop above might have called bmap() and added a new
   // block to ip->addrs[].
   iupdate(ip);
-  printf("ok5\n");
 
   return tot;
 }
