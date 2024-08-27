@@ -195,6 +195,8 @@ sys_unlink(void)
 
   if(argstr(0, path, MAXPATH) < 0)
     return -1;
+  
+
 
   begin_op();
   if((dp = nameiparent(path, name)) == 0){
@@ -231,6 +233,7 @@ sys_unlink(void)
   ip->nlink--;
   iupdate(ip);
   iunlockput(ip);
+  
 
   end_op();
 
@@ -250,9 +253,7 @@ create(char *path, short type, short major, short minor)
 
   if((dp = nameiparent(path, name)) == 0)
     return 0;
-
   ilock(dp);
-
   if((ip = dirlookup(dp, name, 0)) != 0){
     iunlockput(dp);
     ilock(ip);
@@ -266,7 +267,6 @@ create(char *path, short type, short major, short minor)
     iunlockput(dp);
     return 0;
   }
-
   ilock(ip);
   ip->major = major;
   ip->minor = minor;
@@ -289,7 +289,6 @@ create(char *path, short type, short major, short minor)
   }
 
   iunlockput(dp);
-
   return ip;
 
  fail:
@@ -310,16 +309,23 @@ sys_open(void)
   struct inode *ip;
   int n;
 
+  int depth = 0;
+  int max_depth = 10;  
+  
+
   argint(1, &omode);
   if((n = argstr(0, path, MAXPATH)) < 0)
     return -1;
+/*
+ *我们不应该在所有的写操作完成之前写入commit record。这意味着文件系统操作必须表明事务的开始和结束。
+ * */
 
-  begin_op();
-
+  begin_op(); // begin_op和end_op分别表示transaction的开始和结束。 transaction 中所有写block操作具备原子性。
+  
   if(omode & O_CREATE){
     ip = create(path, T_FILE, 0, 0);
     if(ip == 0){
-      end_op();
+      end_op();// begin_op和end_op分别表示transaction的开始和结束。在end_op中会实现commit操作。在end_op时，我们写入commit record或者log headr
       return -1;
     }
   } else {
@@ -327,6 +333,8 @@ sys_open(void)
       end_op();
       return -1;
     }
+    if(holdingsleep(&ip->lock))
+      iunlock(ip); // inode pointer is locked here! It seems that the lock has already been holded.
     ilock(ip);
     if(ip->type == T_DIR && omode != O_RDONLY){
       iunlockput(ip);
@@ -334,6 +342,35 @@ sys_open(void)
       return -1;
     }
   }
+  printf("345\n"); 
+
+  while(ip != 0 && ip->type == T_SYMLINK && (omode & O_NOFOLLOW) == 0) {
+    if(depth++ >= max_depth) {
+      iunlockput(ip);
+      end_op();
+      return -1;
+    }
+    char symlink_target[MAXPATH];
+    n = readi(ip, 0, (uint64)symlink_target, 0, MAXPATH);
+    if(n <= 0) {
+        iunlockput(ip);
+	end_op();
+        return -1;
+    }
+    symlink_target[n] = '\0';  
+    iunlockput(ip);
+    ip = namei(symlink_target);
+    if(ip == 0)
+      return -1;
+    if(!holdingsleep(&ip->lock)){
+	    ilock(ip);
+    }
+    }
+    if(ip == 0){
+      end_op();
+      return -1;
+    }
+  printf("373\n") ;
 
   if(ip->type == T_DEVICE && (ip->major < 0 || ip->major >= NDEV)){
     iunlockput(ip);
@@ -366,7 +403,8 @@ sys_open(void)
 
   iunlock(ip);
   end_op();
-
+  printf("406\n");
+  
   return fd;
 }
 
@@ -502,4 +540,38 @@ sys_pipe(void)
     return -1;
   }
   return 0;
+}
+
+uint64
+sys_symlink(void){
+    printf("547\n");
+    char path[MAXPATH], target[MAXPATH];
+    struct inode* ip;
+    int n;
+    begin_op();
+    printf("552\n");
+    if((n = argstr(0,target, MAXPATH)) < 0)
+      return -1;
+    if((n = argstr(1, path, MAXPATH)) < 0)
+      return -1;
+    printf("557\n");
+    ip = create(path, T_SYMLINK, 0, 0);
+    printf("559\n");
+    if(ip == 0){
+      printf("561\n");
+      return -1;
+    }
+    printf("ip:%p\n",ip);
+    if(holdingsleep(&ip->lock))
+      printf("hold lock\n");
+    if(writei(ip, 0, (uint64)target, 0, strlen(target)) != strlen(target)){
+      printf("563\n");
+      iunlockput(ip);
+      end_op();
+      return -1;
+    }
+    iunlockput(ip);
+    end_op();
+    printf("ok6\n");
+    return 0;
 }

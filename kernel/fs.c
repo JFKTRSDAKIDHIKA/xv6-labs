@@ -208,7 +208,7 @@ ialloc(uint dev, short type)
     if(dip->type == 0){  // a free inode
       memset(dip, 0, sizeof(*dip));
       dip->type = type;
-      log_write(bp);   // mark it allocated on the disk
+      log_write(bp);   // mark it allocated on the disk  // log_write是由文件系统的logging实现的方法。任何一个文件系统调用的begin_op和end_op之间的写操作总是会走到log_write。
       brelse(bp);
       return iget(dev, inum);
     }
@@ -295,11 +295,7 @@ ilock(struct inode *ip)
   struct buf *bp;
   struct dinode *dip;
 
-  if(ip == 0 || ip->ref < 1)
-    panic("ilock");
-
   acquiresleep(&ip->lock);
-
   if(ip->valid == 0){
     bp = bread(ip->dev, IBLOCK(ip->inum, sb));
     dip = (struct dinode*)bp->data + ip->inum%IPB;
@@ -382,8 +378,8 @@ iunlockput(struct inode *ip)
 static uint
 bmap(struct inode *ip, uint bn)
 {
-  uint addr, *a;
-  struct buf *bp;
+  uint addr, *a, addr1, addr2, *a1, *a2;
+  struct buf *bp, *bp1, *bp2;
 
   if(bn < NDIRECT){
     if((addr = ip->addrs[bn]) == 0){
@@ -410,13 +406,57 @@ bmap(struct inode *ip, uint bn)
       addr = balloc(ip->dev);
       if(addr){
         a[bn] = addr;
-        log_write(bp);
+        log_write(bp); // bp指向的这个block已经被写过了，这个函数在in-memory的log head中把这个block标记为dirty
       }
     }
     brelse(bp);
     return addr;
   }
+    
+    bn -= NINDIRECT;
+    if(bn < NINDIRECT * NINDIRECT){
+      uint single_indirect_addr = bn / 256; // Index in the first layer .
+      uint double_indirect_addr = bn % 256; // Index in the second layer.
 
+      if((addr = ip->addrs[NDIRECT + 1]) == 0){
+        addr = balloc(ip->dev);
+        if(addr == 0)
+          return 0;
+        ip->addrs[NDIRECT + 1] = addr;
+      }
+      
+
+      bp1 = bread(ip->dev, addr);
+      a1= (uint*)bp1->data;
+      addr1 = (a1[single_indirect_addr]); // Block number of the second layer of blocks.
+      
+      if(addr1 == 0){
+        addr1 = balloc(ip->dev);
+	if(addr1 == 0)
+          return 0;
+        a1[single_indirect_addr] = addr1;
+	log_write(bp1);
+      }
+//      if(!holdingsleep(&bp1->lock))
+//      printf("1\n");
+      brelse(bp1);
+
+      bp2 = bread(ip->dev, addr1);
+      a2 = (uint*)bp2->data;
+      addr2 = a2[double_indirect_addr];
+
+      if(addr2 == 0){
+        addr2 = balloc(ip->dev);
+        if(addr2){
+          a2[double_indirect_addr]= addr2;
+          log_write(bp2); // bp指向的这个block已经被写过了，这个函数在in-memory的log head中把这个block标记为dirty
+        }
+      }
+//      if(!holdingsleep(&bp2->lock))
+//      printf("2\n");
+      brelse(bp2);
+      return addr2;
+      }
   panic("bmap: out of range");
 }
 
@@ -425,9 +465,9 @@ bmap(struct inode *ip, uint bn)
 void
 itrunc(struct inode *ip)
 {
-  int i, j;
-  struct buf *bp;
-  uint *a;
+  int i, j, k;
+  struct buf *bp, *bp1;
+  uint *a, *a1;
 
   for(i = 0; i < NDIRECT; i++){
     if(ip->addrs[i]){
@@ -448,6 +488,28 @@ itrunc(struct inode *ip)
     ip->addrs[NDIRECT] = 0;
   }
 
+  if(ip->addrs[NDIRECT + 1]){
+    bp = bread(ip->dev, ip->addrs[NDIRECT + 1]);
+    a = (uint*)bp->data;
+    for(j = 0; j < NINDIRECT; j++){
+      if(a[j]){
+        bp1 = bread(ip->dev, a[j]);
+        a1 = (uint*)bp1->data;
+	for(k = 0; k < NINDIRECT; k++){
+          if(a1[k]){
+            bfree(ip->dev, a1[k]);
+	  }
+        }
+	if(a[j]){
+	  bfree(ip->dev, a[j]);
+	}
+	brelse(bp1);
+      }
+    }
+    brelse(bp);
+    bfree(ip->dev, ip->addrs[NDIRECT + 1]);
+    ip->addrs[NDIRECT + 1] = 0;
+  }
   ip->size = 0;
   iupdate(ip);
 }
@@ -504,7 +566,7 @@ readi(struct inode *ip, int user_dst, uint64 dst, uint off, uint n)
 // there was an error of some kind.
 int
 writei(struct inode *ip, int user_src, uint64 src, uint off, uint n)
-{
+{ printf("ok0\n");
   uint tot, m;
   struct buf *bp;
 
@@ -515,17 +577,21 @@ writei(struct inode *ip, int user_src, uint64 src, uint off, uint n)
 
   for(tot=0; tot<n; tot+=m, off+=m, src+=m){
     uint addr = bmap(ip, off/BSIZE);
+    printf("ok1\n");
     if(addr == 0)
       break;
     bp = bread(ip->dev, addr);
+    printf("ok2\n");
     m = min(n - tot, BSIZE - off%BSIZE);
     if(either_copyin(bp->data + (off % BSIZE), user_src, src, m) == -1) {
       brelse(bp);
       break;
     }
     log_write(bp);
+    printf("ok3\n");
     brelse(bp);
   }
+  printf("ok4\n");
 
   if(off > ip->size)
     ip->size = off;
@@ -534,6 +600,7 @@ writei(struct inode *ip, int user_src, uint64 src, uint off, uint n)
   // because the loop above might have called bmap() and added a new
   // block to ip->addrs[].
   iupdate(ip);
+  printf("ok5\n");
 
   return tot;
 }

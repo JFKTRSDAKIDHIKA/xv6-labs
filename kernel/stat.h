@@ -1,8 +1,9 @@
 #define T_DIR     1   // Directory
 #define T_FILE    2   // File
 #define T_DEVICE  3   // Device
+#define T_SYMLINK 4   // Symbolic links
 
-struct stat {
+struct stat { // stat表示文件系统中文件或目录的状态信息。
   int dev;     // File system's disk device
   uint ino;    // Inode number
   short type;  // Type of file

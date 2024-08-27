@@ -52,7 +52,7 @@ static void recover_from_log(void);
 static void commit();
 
 void
-initlog(int dev, struct superblock *sb)
+initlog(int dev, struct superblock *sb) // 当系统crash并重启了，在XV6启动过程中做的一件事情就是调用initlog函数。
 {
   if (sizeof(struct logheader) >= BSIZE)
     panic("initlog: too big logheader");
@@ -109,7 +109,7 @@ write_head(void)
   for (i = 0; i < log.lh.n; i++) {
     hb->block[i] = log.lh.block[i];
   }
-  bwrite(buf);
+  bwrite(buf); // 这里的bwrite就是实际的commit point。在commit point之前，transaction并没有发生，在commit point之后，只要恢复程序正确运行，transaction必然可以完成。
   brelse(buf);
 }
 
@@ -147,7 +147,6 @@ void
 end_op(void)
 {
   int do_commit = 0;
-
   acquire(&log.lock);
   log.outstanding -= 1;
   if(log.committing)
@@ -166,7 +165,7 @@ end_op(void)
   if(do_commit){
     // call commit w/o holding locks, since not allowed
     // to sleep with locks.
-    commit();
+    commit(); // 首先调用了commit()函数。
     acquire(&log.lock);
     log.committing = 0;
     wakeup(&log);
@@ -188,15 +187,18 @@ write_log(void)
     brelse(from);
     brelse(to);
   }
+  /*
+   * 现在我们只是将block存放在了log中。如果我们在这个位置也就是在write_head之前crash了，那么最终的表现就像是transaction从来没有发生过。
+   * */
 }
 
 static void
 commit()
 {
   if (log.lh.n > 0) {
-    write_log();     // Write modified blocks from cache to log
-    write_head();    // Write header to disk -- the real commit
-    install_trans(0); // Now install writes to home locations
+    write_log();     // Write modified blocks from cache to log  // 将所有存在于内存中的log header中的block编号对应的block，从block cache写入到磁盘上的log区域中。
+    write_head();    // Write header to disk -- the real commit // 将内存中的log header写入到磁盘中
+    install_trans(0); // Now install writes to home locations // 将block数据从log中拷贝到了实际的文件系统block中。当然，可能在这里代码的某个位置会出现问题，但是这应该也没问题，因为在恢复的时候，我们会从最开始重新执行过。
     log.lh.n = 0;
     write_head();    // Erase the transaction from the log
   }
@@ -232,5 +234,8 @@ log_write(struct buf *b)
     log.lh.n++;
   }
   release(&log.lock);
+  /*
+   * 任何文件系统调用，如果需要更新block或者说更新block cache中的block，都会将block编号加在cache中的block head
+   */
 }
 
