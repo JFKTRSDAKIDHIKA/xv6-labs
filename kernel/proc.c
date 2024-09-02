@@ -124,7 +124,9 @@ allocproc(void)
 found:
   p->pid = allocpid();
   p->state = USED;
-
+  for(int i = 0 ;i < 16 ;i++){
+    p->VMAs[i].valid = 0;
+  }
   // Allocate a trapframe page.
   if((p->trapframe = (struct trapframe *)kalloc()) == 0){
     freeproc(p);
@@ -158,6 +160,10 @@ freeproc(struct proc *p)
   if(p->trapframe)
     kfree((void*)p->trapframe);
   p->trapframe = 0;
+  for(int i = 0; i < 16; i++) {
+    uvmunmap(p->pagetable, p->VMAs[i].start, p->VMAs[i].length / PGSIZE, 0);
+    memset(&p->VMAs[i], 0, sizeof(struct VMA));
+  }
   if(p->pagetable)
     proc_freepagetable(p->pagetable, p->sz);
   p->pagetable = 0;
@@ -295,6 +301,13 @@ fork(void)
     return -1;
   }
   np->sz = p->sz;
+  
+  for(i = 0 ;i < 16 ;i++){
+    np->VMAs[i] = p->VMAs[i];
+    if(p->VMAs[i].valid)
+    np->VMAs[i].file = filedup(p->VMAs[i].file);
+  }
+  
 
   // copy saved user registers.
   *(np->trapframe) = *(p->trapframe);
@@ -359,6 +372,16 @@ exit(int status)
       p->ofile[fd] = 0;
     }
   }
+
+    for(int i = 0; i < 16; i++) {
+      if(p->VMAs[i].valid) {
+        uvmunmap(p->pagetable, p->VMAs[i].start, p->VMAs[i].length / PGSIZE, 0);
+        memset(&p->VMAs[i], 0, sizeof(struct VMA));
+      }
+    }
+
+
+
 
   begin_op();
   iput(p->cwd);

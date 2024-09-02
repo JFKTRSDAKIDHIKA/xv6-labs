@@ -5,6 +5,9 @@
 #include "spinlock.h"
 #include "proc.h"
 #include "defs.h"
+#include "sleeplock.h"
+#include "fs.h"
+#include "file.h"
 
 struct spinlock tickslock;
 uint ticks;
@@ -67,11 +70,39 @@ usertrap(void)
     syscall();
   } else if((which_dev = devintr()) != 0){
     // ok
+  } else if(r_scause() == 13 || r_scause() == 15 || r_scause() == 12){
+  struct proc *p = myproc();
+  printf("PID:%d\n",p->pid);
+  uint64 fault_addr = r_stval();  // Faulting address
+  printf("Faulting address : %p\n",r_stval());
+  for (int i = 0; i < 16; i++) {
+    struct VMA *vma = &p->VMAs[i];
+    if (vma->valid && fault_addr >= vma->start && fault_addr < vma->start + vma->length) {
+    uint64 ka = (uint64) kalloc();
+    printf("ka: %p\n", ka);
+    memset((char *)ka, 0, PGSIZE);
+    struct inode *ip = (vma->file)->ip;
+    int flag = (vma->prot << 1) | PTE_U;
+    if (mappages(p->pagetable, PGROUNDDOWN(fault_addr), PGSIZE, ka, flag) != 0) {
+      panic("mappages failed");
+    }
+    if(walkaddr(p->pagetable,PGROUNDDOWN(fault_addr)) == ka)
+      printf("page mage ok!\n"); 
+    ilock(vma->file->ip);
+    readi(ip, 0, ka, PGROUNDDOWN(fault_addr) - vma->start, PGSIZE);
+    iunlock(vma->file->ip);
+    printf("PGROUNDDOWN(fault_addr): %p\n",PGROUNDDOWN(fault_addr));
+    printf("myproc()->sz :%p\n",myproc()->sz);
+    printf("ready to break\n");
+    break;
+    }
+  }
   } else {
     printf("usertrap(): unexpected scause %p pid=%d\n", r_scause(), p->pid);
     printf("            sepc=%p stval=%p\n", r_sepc(), r_stval());
     setkilled(p);
   }
+  
 
   if(killed(p))
     exit(-1);
@@ -79,6 +110,8 @@ usertrap(void)
   // give up the CPU if this is a timer interrupt.
   if(which_dev == 2)
     yield();
+  if(r_scause() == 13 || r_scause() == 15 || r_scause() == 12)
+    printf("breaked\n");
 
   usertrapret();
 }
