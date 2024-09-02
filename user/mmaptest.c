@@ -282,6 +282,7 @@ fork_test(void)
 
   if((pid = fork()) < 0)
     err("fork");
+  printf("pid:%d\n",pid);
   if (pid == 0) {
     _v1(p1);
     if (munmap(p1, PGSIZE) == -1) // just the first page

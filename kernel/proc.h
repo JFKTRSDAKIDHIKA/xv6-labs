@@ -87,7 +87,6 @@ struct VMA{
   int prot;
   int flags;
   struct file *file;
-  pagetable_t pagetable;
   int offset;
   int valid; // 1 表示 in use, 0 表示available.
 };

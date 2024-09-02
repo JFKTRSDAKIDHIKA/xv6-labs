@@ -119,12 +119,13 @@ sys_uptime(void)
 uint64
 sys_mmap(void)
 {
-  uint64 addr;
-  uint64 length;
-  int prot, flags, fd;
-  int offset;
-  struct file *f;
+  uint64 addr; // the mapped virtual address, always zero.
+  uint64 length; // the number of bytes to map in the file.
+  int prot, flags, fd;  
+  int offset; // always 0;
+  struct file *f; // the ptr to the mapped file.
   f = 0;
+
   // 从用户空间获取参数
   argaddr(0, &addr);         // 获取第一个参数：地址
   argint(1, (int *)&length);  // 获取第二个参数：长度
@@ -133,58 +134,62 @@ sys_mmap(void)
   argfd(4, &fd, &f);             // 获取第五个参数：文件描述符
   argint(5, &offset);  // 获取第六个参数：文件偏移
   
+  // file not writebale but mapped writeable, return -1.
   if (!f->writable && (prot & PROT_WRITE) && (flags & MAP_SHARED)) return -1;
 
   int i;
+  struct proc *p = myproc();
   for(i = 0; i< 16; i++){
-    printf("myproc()->VMAs[i].valid: %d\n", myproc()->VMAs[i].valid);
-    if(!myproc()->VMAs[i].valid){
+    if(!p->VMAs[i].valid){
       myproc()->VMAs[i].valid = 1;	    
       break;
     }
     if(i == 15)
       panic("no free VMA");
   }
-  printf("PID:%d\n",myproc()->pid);
-  myproc()->VMAs[i].start = myproc()->sz;
-  printf("myproc()->sz: %p\n",myproc()->sz);
-  myproc()->sz = myproc()->sz + PGROUNDUP(length);
-  myproc()->VMAs[i].length =PGROUNDUP(length);
-  myproc()->VMAs[i].prot = prot;
-  myproc()->VMAs[i].flags = flags;
-  myproc()->VMAs[i].offset = 0; 
-  myproc()->VMAs[i].file = filedup(f);
-  myproc()->VMAs[i].pagetable = myproc()->pagetable;
-  return (uint64)myproc()->VMAs[i].start; 
+  p->VMAs[i].start = p->sz; // lazy allcation assigned address. Currently not valid.
+  p->sz = p->sz + PGROUNDUP(length);// renew the top of the stack.
+  p->VMAs[i].length =length;
+  p->VMAs[i].prot = prot;
+  p->VMAs[i].flags = flags;
+  p->VMAs[i].offset = offset; // alwsys zero. 
+  p->VMAs[i].file = filedup(f); 
+  return (uint64)p->VMAs[i].start; 
 
 }
 
 uint64
 sys_munmap(void)
 {
-  uint64 addr;
+  uint64 addr; // unmap区域的头部地址
+  int length;  // unmap区域的长度（bytes）
   argaddr(0, &addr);  
-  int length; 
   argint(1, &length);
 
   struct proc *p = myproc();
-  int i;
-  for(i = 0;i < 16;i++){
-    struct VMA *vma = &p->VMAs[i];
-    if(vma->valid && addr >= vma->start && addr < vma->start + vma->length){
-      // Find the VMA for this address range.
-      printf("Find the VMA for this address range.\n");
- 
-      if(vma->flags == MAP_SHARED)                                                               filewrite(vma->file, vma->start, vma->length);    
 
-      if(PGROUNDUP(vma->length) == PGROUNDUP(length)){
+  int i;
+  for(i = 0 ;i < 16 ;i++){
+    struct VMA *vma = &p->VMAs[i];
+    if(vma->valid && addr >= vma->start && addr < vma->start + PGROUNDUP(vma->length)){
+      // Find the VMA for this address range.
+      if(vma->flags == MAP_SHARED) // writeback the mapped memory to the file.
+        filewrite(vma->file, vma->start, vma->length);    
+
+      if(PGROUNDUP(vma->length) == PGROUNDUP(length)){// unmap的length==vma的length
 	vma->valid = 0;
         fileclose(vma->file);
       }else{
-        vma->start = addr + PGROUNDUP(length);
-	vma->length = vma->length - PGROUNDUP(length);
+        if(addr == vma->start){
+          vma->start = addr + PGROUNDUP(length);
+	  vma->length = vma->length - PGROUNDUP(length);
+	}else if(addr + length >= vma->start + vma->length){
+	  vma->length = vma->length - PGROUNDUP(length);
+	}else{
+	  panic("punch a hole in the middle of a region");
+	}
       }
-      uvmunmap(p->pagetable, PGROUNDDOWN(addr), PGROUNDUP(length) % PGSIZE, 1);
+      uvmunmap(p->pagetable, PGROUNDDOWN(addr), (int)PGROUNDUP(length) / PGSIZE, 1);
     }
   }  
   return 0;

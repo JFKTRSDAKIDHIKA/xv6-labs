@@ -5,6 +5,7 @@
 #include "spinlock.h"
 #include "proc.h"
 #include "defs.h"
+#include "fcntl.h"
 
 struct cpu cpus[NCPU];
 
@@ -160,10 +161,6 @@ freeproc(struct proc *p)
   if(p->trapframe)
     kfree((void*)p->trapframe);
   p->trapframe = 0;
-  for(int i = 0; i < 16; i++) {
-    uvmunmap(p->pagetable, p->VMAs[i].start, p->VMAs[i].length / PGSIZE, 0);
-    memset(&p->VMAs[i], 0, sizeof(struct VMA));
-  }
   if(p->pagetable)
     proc_freepagetable(p->pagetable, p->sz);
   p->pagetable = 0;
@@ -301,12 +298,15 @@ fork(void)
     return -1;
   }
   np->sz = p->sz;
-  
+ 
   for(i = 0 ;i < 16 ;i++){
-    np->VMAs[i] = p->VMAs[i];
-    if(p->VMAs[i].valid)
-    np->VMAs[i].file = filedup(p->VMAs[i].file);
+    if(p->VMAs[i].valid){
+      np->VMAs[i] = p->VMAs[i];
+      np->VMAs[i].file = filedup(p->VMAs[i].file);
+    }
   }
+  
+
   
 
   // copy saved user registers.
@@ -373,12 +373,18 @@ exit(int status)
     }
   }
 
-    for(int i = 0; i < 16; i++) {
-      if(p->VMAs[i].valid) {
-        uvmunmap(p->pagetable, p->VMAs[i].start, p->VMAs[i].length / PGSIZE, 0);
-        memset(&p->VMAs[i], 0, sizeof(struct VMA));
-      }
+  for(int i = 0; i < 16; i++) {
+    if(p->VMAs[i].valid){
+	if(p->VMAs[i].flags == MAP_SHARED){
+	  filewrite(p->VMAs[i].file, p->VMAs[i].start, p->VMAs[i].length);
+	}
+	printf("npages= %d, length = %d\n",PGSIZE, (int)p->VMAs[i].length / 4096);
+        uvmunmap(p->pagetable, p->VMAs[i].start, (int)PGROUNDUP(p->VMAs[i].length) / PGSIZE, 1);
+        p->sz = p->sz - PGROUNDUP(p->VMAs[i].length);
+	p->VMAs[i].valid = 0;
+	fileclose(p->VMAs[i].file);
     }
+  }
 
 
 
