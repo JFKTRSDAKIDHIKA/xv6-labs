@@ -378,14 +378,12 @@ exit(int status)
 	if(p->VMAs[i].flags == MAP_SHARED){
 	  filewrite(p->VMAs[i].file, p->VMAs[i].start, p->VMAs[i].length);
 	}
-	printf("npages= %d, length = %d\n",PGSIZE, (int)p->VMAs[i].length / 4096);
         uvmunmap(p->pagetable, p->VMAs[i].start, (int)PGROUNDUP(p->VMAs[i].length) / PGSIZE, 1);
         p->sz = p->sz - PGROUNDUP(p->VMAs[i].length);
 	p->VMAs[i].valid = 0;
 	fileclose(p->VMAs[i].file);
     }
   }
-
 
 
 
@@ -408,7 +406,7 @@ exit(int status)
   p->state = ZOMBIE;
 
   release(&wait_lock);
-
+  
   // Jump into the scheduler, never to return.
   sched();
   panic("zombie exit");

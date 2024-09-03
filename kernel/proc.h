@@ -89,6 +89,9 @@ struct VMA{
   struct file *file;
   int offset;
   int valid; // 1 表示 in use, 0 表示available.
+  int allocated;
+  int ticksA;
+  int ticksB;
 };
 
 // Per-process state

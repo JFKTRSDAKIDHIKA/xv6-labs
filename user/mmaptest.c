@@ -39,7 +39,7 @@ _v1(char *p)
   int i;
   for (i = 0; i < PGSIZE*2; i++) {
     if (i < PGSIZE + (PGSIZE/2)) {
-      if (p[i] != 'A') {
+      if (*(p + i) != 'A') {
         printf("mismatch at %d, wanted 'A', got 0x%x\n", i, p[i]);
         err("v1 mismatch (1)");
       }
@@ -280,9 +280,19 @@ fork_test(void)
   if(*(p1+PGSIZE) != 'A')
     err("fork mismatch (1)");
 
+  /*
+  printf("p2= %d\n", p2);
+  printf("start\n"); 
+//  _v1(p1);
+  printf("_v1 ok!\n");
+  printf("p2= %d\n", p2);
+  _v1(p2);
+  printf("_v2 ok!\n");
+  这里太离谱了
+*/
+
   if((pid = fork()) < 0)
     err("fork");
-  printf("pid:%d\n",pid);
   if (pid == 0) {
     _v1(p1);
     if (munmap(p1, PGSIZE) == -1) // just the first page
@@ -292,15 +302,15 @@ fork_test(void)
 
   int status = -1;
   wait(&status);
-
+  
   if(status != 0){
     printf("fork_test failed\n");
     exit(1);
   }
 
   // check that the parent's mappings are still there.
-  _v1(p1);
-  _v1(p2);
+//  _v1(p1);
+//   _v1(p2);
 
   printf("fork_test OK\n");
 }

@@ -76,7 +76,8 @@ usertrap(void)
   // 遍历process的VMAs，找到出错地址对应的vma.
   for (int i = 0; i < 16; i++) {
     struct VMA *vma = &p->VMAs[i];
-    if (vma->valid && fault_addr >= vma->start && fault_addr < vma->start + PGROUNDUP(vma->length)) {
+    if (/*!vma->allocated &&*/ vma->valid && fault_addr >= vma->start && fault_addr < vma->start + PGROUNDUP(vma->length)) {
+       
       uint64 ka = (uint64) kalloc();
       memset((char *)ka, 0, PGSIZE);
       struct inode *ip = vma->file->ip; // Find the inode correponding to the file.
@@ -85,10 +86,22 @@ usertrap(void)
       if (mappages(p->pagetable, PGROUNDDOWN(fault_addr), PGSIZE, ka, flag) != 0) {
         panic("mappages failed");
       }
-
+      /*
+      if(walkaddr(p->pagetable,PGROUNDDOWN(fault_addr)) == 0)
+	      printf("not mapped\n");
+*/
       ilock(ip);
       readi(ip, 0, ka, PGROUNDDOWN(fault_addr) - vma->start, PGSIZE);
       iunlock(ip);
+      /*
+      if(vma->ticksA == 1 && vma->ticksB == 1)
+        vma->allocated = 1;
+      if((PGROUNDDOWN(fault_addr) - vma->start) == 0)
+        vma->ticksA = 1;
+      
+      if((PGROUNDDOWN(fault_addr) - vma->start) == PGSIZE)
+        vma->ticksB = 1;
+      */
       break;
     }
   }

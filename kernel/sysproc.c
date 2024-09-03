@@ -154,6 +154,7 @@ sys_mmap(void)
   p->VMAs[i].flags = flags;
   p->VMAs[i].offset = offset; // alwsys zero. 
   p->VMAs[i].file = filedup(f); 
+  p->VMAs[i].allocated = 0; // Lazy allocation.Not finished yet.
   return (uint64)p->VMAs[i].start; 
 
 }
