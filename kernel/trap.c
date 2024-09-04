@@ -74,7 +74,8 @@ usertrap(void)
   struct proc *p = myproc();
   uint64 fault_addr = r_stval();  // Faulting address
   // 遍历process的VMAs，找到出错地址对应的vma.
-  for (int i = 0; i < 16; i++) {
+  int i = 0;
+  for (i = 0; i < 16; i++) {
     struct VMA *vma = &p->VMAs[i];
     if (/*!vma->allocated &&*/ vma->valid && fault_addr >= vma->start && fault_addr < vma->start + PGROUNDUP(vma->length)) {
        
@@ -93,7 +94,7 @@ usertrap(void)
       ilock(ip);
       readi(ip, 0, ka, PGROUNDDOWN(fault_addr) - vma->start, PGSIZE);
       iunlock(ip);
-      /*
+/*      
       if(vma->ticksA == 1 && vma->ticksB == 1)
         vma->allocated = 1;
       if((PGROUNDDOWN(fault_addr) - vma->start) == 0)
@@ -101,10 +102,12 @@ usertrap(void)
       
       if((PGROUNDDOWN(fault_addr) - vma->start) == PGSIZE)
         vma->ticksB = 1;
-      */
+  */    
       break;
     }
-  }
+  } 
+    if(i == 16) 
+      setkilled(p);
   } else {
     printf("usertrap(): unexpected scause %p pid=%d\n", r_scause(), p->pid);
     printf("            sepc=%p stval=%p\n", r_sepc(), r_stval());

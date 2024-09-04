@@ -2575,6 +2575,7 @@ struct test {
   void (*f)(char *);
   char *s;
 } quicktests[] = {
+	
   {copyin, "copyin"},
   {copyout, "copyout"},
   {copyinstr1, "copyinstr1"},
@@ -2619,7 +2620,7 @@ struct test {
   {iref, "iref"},
   {forktest, "forktest"},
   {sbrkbasic, "sbrkbasic"},
-  {sbrkmuch, "sbrkmuch"},
+  {sbrkmuch, "sbrkmuch"}, 
   {kernmem, "kernmem"},
   {MAXVAplus, "MAXVAplus"},
   {sbrkfail, "sbrkfail"},

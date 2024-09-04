@@ -5,11 +5,12 @@
 #include "kernel/riscv.h"
 #include "kernel/fs.h"
 #include "user/user.h"
+#include "kernel/syscall.h"
+#include "kernel/memlayout.h"
 
 void mmap_test();
 void fork_test();
 char buf[BSIZE];
-
 #define MAP_FAILED ((char *) -1)
 
 int
@@ -111,7 +112,6 @@ mmap_test(void)
   // offset in the file.
   //
   char *p = mmap(0, PGSIZE*2, PROT_READ, MAP_PRIVATE, fd, 0);
-  printf("OK--p: %p\n",p);
   if (p == MAP_FAILED)
     err("mmap (1)");
   _v1(p);
@@ -279,17 +279,7 @@ fork_test(void)
   // read just 2nd page.
   if(*(p1+PGSIZE) != 'A')
     err("fork mismatch (1)");
-
-  /*
-  printf("p2= %d\n", p2);
-  printf("start\n"); 
-//  _v1(p1);
-  printf("_v1 ok!\n");
-  printf("p2= %d\n", p2);
-  _v1(p2);
-  printf("_v2 ok!\n");
-  这里太离谱了
-*/
+  
 
   if((pid = fork()) < 0)
     err("fork");
@@ -309,8 +299,8 @@ fork_test(void)
   }
 
   // check that the parent's mappings are still there.
-//  _v1(p1);
-//   _v1(p2);
+  _v1(p1);
+  _v1(p2);
 
   printf("fork_test OK\n");
 }

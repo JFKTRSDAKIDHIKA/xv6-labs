@@ -120,41 +120,54 @@ uint64
 sys_mmap(void)
 {
   uint64 addr; // the mapped virtual address, always zero.
-  uint64 length; // the number of bytes to map in the file.
+  int  length; // the number of bytes to map in the file.
+  /*
+   * severe error occured here. If length is declared as uint, may be overflow, or may be dangerous type cast, or other reasons. Anyway, it's tricky.
+   * */
   int prot, flags, fd;  
   int offset; // always 0;
   struct file *f; // the ptr to the mapped file.
   f = 0;
-
+  
   // 从用户空间获取参数
   argaddr(0, &addr);         // 获取第一个参数：地址
-  argint(1, (int *)&length);  // 获取第二个参数：长度
+  argint(1, &length);  // 获取第二个参数：长度
   argint(2, &prot);           // 获取第三个参数：保护标志
   argint(3, &flags);          // 获取第四个参数：映射标志
   argfd(4, &fd, &f);             // 获取第五个参数：文件描述符
   argint(5, &offset);  // 获取第六个参数：文件偏移
-  
+ 
+  // addr will always be zero, meaning that the kernel should decide the virtual address at which to map the file. 
+  if(addr != 0) 
+    return 0xffffffffffffffff;
+  // You can assume offset is zero (it's the starting point in the file at which to map).
+  if(offset != 0)
+    return 0xffffffffffffffff;
+  if(length == 0)                                                                     
+    return 0xffffffffffffffff;
   // file not writebale but mapped writeable, return -1.
-  if (!f->writable && (prot & PROT_WRITE) && (flags & MAP_SHARED)) return -1;
+  if (!f->writable && (prot & PROT_WRITE) && (flags & MAP_SHARED)) 
+    return 0xffffffffffffffff;
 
+  // Fill in the page table lazily, in response to page faults. 
   int i;
   struct proc *p = myproc();
   for(i = 0; i< 16; i++){
     if(!p->VMAs[i].valid){
-      myproc()->VMAs[i].valid = 1;	    
+      p->VMAs[i].valid = 1;	    
       break;
     }
     if(i == 15)
       panic("no free VMA");
   }
-  p->VMAs[i].start = p->sz; // lazy allcation assigned address. Currently not valid.
-  p->sz = p->sz + PGROUNDUP(length);// renew the top of the stack.
-  p->VMAs[i].length =length;
+
+  p->VMAs[i].start = p->msz - PGROUNDUP(length); // grow down form TRAPFRAME, PG aligned.
+  p->msz = p->msz - PGROUNDUP(length);
+  p->VMAs[i].length =length; // not page aligned.
   p->VMAs[i].prot = prot;
   p->VMAs[i].flags = flags;
   p->VMAs[i].offset = offset; // alwsys zero. 
   p->VMAs[i].file = filedup(f); 
-  p->VMAs[i].allocated = 0; // Lazy allocation.Not finished yet.
   return (uint64)p->VMAs[i].start; 
 
 }
@@ -182,9 +195,11 @@ sys_munmap(void)
         fileclose(vma->file);
       }else{
         if(addr == vma->start){
+          // unmap at the start.
           vma->start = addr + PGROUNDUP(length);
 	  vma->length = vma->length - PGROUNDUP(length);
-	}else if(addr + length >= vma->start + vma->length){
+	}else if(addr + length >= vma->start + PGROUNDUP(vma->length)){
+          // unmap at the end.
 	  vma->length = vma->length - PGROUNDUP(length);
 	}else{
 	  panic("punch a hole in the middle of a region");

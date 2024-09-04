@@ -125,6 +125,7 @@ allocproc(void)
 found:
   p->pid = allocpid();
   p->state = USED;
+  p->msz = TRAPFRAME;
   for(int i = 0 ;i < 16 ;i++){
     p->VMAs[i].valid = 0;
   }
@@ -165,6 +166,7 @@ freeproc(struct proc *p)
     proc_freepagetable(p->pagetable, p->sz);
   p->pagetable = 0;
   p->sz = 0;
+  p->msz = 0;
   p->pid = 0;
   p->parent = 0;
   p->name[0] = 0;
@@ -379,7 +381,6 @@ exit(int status)
 	  filewrite(p->VMAs[i].file, p->VMAs[i].start, p->VMAs[i].length);
 	}
         uvmunmap(p->pagetable, p->VMAs[i].start, (int)PGROUNDUP(p->VMAs[i].length) / PGSIZE, 1);
-        p->sz = p->sz - PGROUNDUP(p->VMAs[i].length);
 	p->VMAs[i].valid = 0;
 	fileclose(p->VMAs[i].file);
     }

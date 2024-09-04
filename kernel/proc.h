@@ -83,15 +83,12 @@ enum procstate { UNUSED, USED, SLEEPING, RUNNABLE, RUNNING, ZOMBIE };
 
 struct VMA{
   uint64 start;
-  uint64 length;
+  int length; // not page aligned.
   int prot;
   int flags;
   struct file *file;
-  int offset;
+  int offset; // always 0.
   int valid; // 1 表示 in use, 0 表示available.
-  int allocated;
-  int ticksA;
-  int ticksB;
 };
 
 // Per-process state
@@ -111,6 +108,7 @@ struct proc {
   // these are private to the process, so p->lock need not be held.
   uint64 kstack;               // Virtual address of kernel stack
   uint64 sz;                   // Size of process memory (bytes)
+  uint64 msz;                  // The upper border of the file-mapped region
   pagetable_t pagetable;       // User page table
   struct trapframe *trapframe; // data page for trampoline.S
   struct context context;      // swtch() here to run process
