@@ -102,7 +102,39 @@ e1000_transmit(struct mbuf *m)
   // the TX descriptor ring so that the e1000 sends it. Stash
   // a pointer so that it can be freed after sending.
   //
+
+  acquire(&e1000_lock);
+
+  int i; // transmit ring descriptor index.
+  i = regs[E1000_TDT];
+
+  /*
+   *If E1000_TXD_STAT_DD is not set in the descriptor indexed by E1000_TDT, 
+   *the E1000 hasn't finished the corresponding previous transmission request, so return an error.
+    */
+  if(!(tx_ring[i].status & E1000_TXD_STAT_DD)){
+    release(&e1000_lock);
+    return -1;
+  }
+
+  // use mbuffree() to free the last mbuf that was transmitted from that descriptor.
+  if(tx_mbufs[i]){
+    mbuffree(tx_mbufs[i]);
+    tx_mbufs[i] = 0;
+  }
   
+  // fill in the descriptor.
+  tx_ring[i].addr = (uint64)m->head; // m.head points to the packet's content in memory
+  tx_ring[i].length = m->len; // m.len is the packet length
+//  tx_ring[i].status = 0;
+  tx_ring[i].cmd = E1000_TXD_CMD_EOP | E1000_TXD_CMD_RS;
+
+  tx_mbufs[i] = m;
+
+  // update the ring position by adding one to E1000_TDT modulo TX_RING_SIZE.
+  regs[E1000_TDT] = (i + 1) % TX_RING_SIZE;
+
+  release(&e1000_lock);
   return 0;
 }
 
@@ -114,11 +146,34 @@ e1000_recv(void)
   //
   // Check for packets that have arrived from the e1000
   // Create and deliver an mbuf for each packet (using net_rx()).
-  //
+  int i; // receive ring descriptor index.
+  while(1){
+
+  
+  // fetching the E1000_RDT control register and adding one modulo RX_RING_SIZE.
+  i = (regs[E1000_RDT] + 1) % RX_RING_SIZE;
+
+  // check if a new packet is available by checking for the E1000_RXD_STAT_DD bit in the status portion of the descriptor.
+  if(!(rx_ring[i].status & E1000_RXD_STAT_DD))
+    return;
+
+  // update the mbuf's m.len to the length reported in the descriptor. Deliver the mbuf to the network stack using net_rx().
+  rx_mbufs[i]->len = rx_ring[i].length;
+  net_rx(rx_mbufs[i]);
+
+  // allocate a new mbuf using mbufalloc() to replace the one just given to net_rx(). 
+  rx_mbufs[i] = mbufalloc(0);
+  rx_ring[i].addr = (uint64)rx_mbufs[i]->head;
+  rx_ring[i].status = 0;
+
+  //  update the E1000_RDT register to be the index of the last ring descriptor processed.
+  regs[E1000_RDT] = i;
+
+  }
+
 }
 
-void
-e1000_intr(void)
+void e1000_intr(void)
 {
   // tell the e1000 we've seen this interrupt;
   // without this the e1000 won't raise any
