@@ -16,4 +16,3 @@ struct bucket{
   struct buf *first;
   struct spinlock lock;
 };
-

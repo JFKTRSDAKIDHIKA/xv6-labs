@@ -146,7 +146,7 @@ test0()
 void test1()
 {
   char file[3];
-  enum { N = 200, BIG=100, NCHILD=2 };
+  enum { N = 200, BIG=100, NCHILD=2};
   
   printf("start test1\n");
   file[0] = 'B';
@@ -160,6 +160,8 @@ void test1()
       createfile(file, 1);
     }
   }
+
+
   for(int i = 0; i < NCHILD; i++){
     file[1] = '0' + i;
     int pid = fork();
