@@ -146,6 +146,7 @@ e1000_recv(void)
   //
   // Check for packets that have arrived from the e1000
   // Create and deliver an mbuf for each packet (using net_rx()).
+
   int i; // receive ring descriptor index.
   while(1){
 
@@ -154,8 +155,9 @@ e1000_recv(void)
   i = (regs[E1000_RDT] + 1) % RX_RING_SIZE;
 
   // check if a new packet is available by checking for the E1000_RXD_STAT_DD bit in the status portion of the descriptor.
-  if(!(rx_ring[i].status & E1000_RXD_STAT_DD))
+  if(!(rx_ring[i].status & E1000_RXD_STAT_DD)){
     return;
+  }
 
   // update the mbuf's m.len to the length reported in the descriptor. Deliver the mbuf to the network stack using net_rx().
   rx_mbufs[i]->len = rx_ring[i].length;
